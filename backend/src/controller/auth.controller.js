@@ -231,3 +231,22 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
     maxAge: 15 * 60 * 1000, // 15 min
   });
 };
+
+exports.logoutUser = async (req, res) => {
+  res
+    .clearCookie("accessToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    })
+    .clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    })
+    .status(200)
+    .json({
+      success: true,
+      message: "Logged out successfully",
+    });
+};
