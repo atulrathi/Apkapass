@@ -200,29 +200,6 @@ const Sidebar = ({ visible, navigate, currentPath, provider, isLoading }) => {
           );
         })}
       </nav>
-
-      {/* Profile Section */}
-      <div style={{ margin: "0 16px 16px", padding: "16px", borderRadius: 16, background: "#F8FAFC", border: "1px solid #E2E8F0", cursor: "pointer" }} onClick={() => !isLoading && navigate("/provider-settings")}>
-        {isLoading ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <SkeletonLine width={42} height={42} borderRadius="50%" />
-            <div style={{ flex: 1 }}>
-              <SkeletonLine width="80%" height={14} style={{ marginBottom: 6 }} />
-              <SkeletonLine width="50%" height={10} />
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 42, height: 42, borderRadius: "50%", background: "linear-gradient(135deg,#16A34A,#4ADE80)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14, flexShrink: 0, boxShadow: "0 2px 6px rgba(22,163,74,0.2)" }}>
-              {initials}
-            </div>
-            <div style={{ overflow: "hidden" }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#1E293B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{provider?.name}</p>
-              <p style={{ margin: "2px 0 0", fontSize: 12, fontWeight: 500, color: "#64748B" }}>{provider?.plan || "Free"} Plan</p>
-            </div>
-          </div>
-        )}
-      </div>
     </aside>
   );
 };

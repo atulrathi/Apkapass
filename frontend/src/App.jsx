@@ -6,7 +6,8 @@ import Userdeashboard from "./pages/userdeashboard";
 import ProviderProfile from "./pages/providerdeshboard";
 import Providerregister from "./pages/Providerregister";
 import Navbar from "./pages/Navbar";
-import Providerservices from "./pages/Services"
+import Providerservices from "./pages/Services";
+import Providersettings from "./components/providersettingcard";
 
 import "./App.css";
 
@@ -29,6 +30,7 @@ function App() {
           }
         />
         <Route path="/provider-services" element={<Providerservices />} />
+        <Route path='/provider-settings' element={<Providersettings />} />
       </Routes>
     </Router>
   );
