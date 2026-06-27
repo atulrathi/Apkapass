@@ -250,7 +250,7 @@ export default function ProviderSettings() {
       try {
         const response = await axiosInstance.get("/provider/getproviderdetails");
         const doc = response?.data?.data || response?.data || {};
-        console.log("Fetched provider data:", doc);
+        console.log("Fetched provider details:", doc);
 
         // Extract phone safely whether it was populated via userId lookup or directly injected
         const phoneData = doc?.userId?.phone || doc?.phone || "";
@@ -330,8 +330,6 @@ export default function ProviderSettings() {
 
     setIsUploadingPhoto(true);
     try {
-
-     
          const formData = new FormData();
          formData.append("profileImage", file);
          const response = await axiosInstance.post(
@@ -339,7 +337,7 @@ export default function ProviderSettings() {
            formData,
            { headers: { "Content-Type": "multipart/form-data" } }
          );
-         const imageUrl = response?.data?.data?.profileImage || response?.data?.profileImage;
+         const imageUrl = response?.data?.path || response?.data?.profileImage;
       
 
       setProvider((prev) => ({ ...prev, profileImage: imageUrl }));

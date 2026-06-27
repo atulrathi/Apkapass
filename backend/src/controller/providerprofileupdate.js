@@ -3,18 +3,17 @@ const provider = require("../models/provider");
 const updateProfileImage = async (req, res) => {
   try {
     const { id } = req.user;
-    const { profileImage } = req.file;
-
-    console.logg(id, profileImage);
+    const { path } = req.file;
 
     await provider.findByIdAndUpdate(
       id,
-      { profileImage },
+      { profileImage : path },
       { new: true }
     );
 
     res.status(200).json({
       success: true,
+      path
     });
   } catch (error) {
     console.error("Error updating profile image:", error);
