@@ -7,6 +7,9 @@ const providerSchema = new mongoose.Schema({
     required: true,
     index: true 
   },
+  profileImage: {
+    type: String,
+  },
   name: {
     type: String,
     required: true,

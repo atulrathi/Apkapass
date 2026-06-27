@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axiosInstance from "../services/axiosinstance";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -17,7 +17,8 @@ const icons = {
   logout: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
   chevronLeft: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
   mapPin: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
-  fileText: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+  fileText: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+  camera: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
 };
 
 const navItems = [
@@ -26,6 +27,8 @@ const navItems = [
   { icon: "star", label: "Reviews", path: "/provider-reviews" },
   { icon: "settings", label: "Settings", path: "/provider-settings" },
 ];
+
+const MAX_IMAGE_SIZE_MB = 5;
 
 const SkeletonLine = ({ width, height = 14, borderRadius = 4, bg = "#E2E8F0", style }) => (
   <div style={{ width, height, borderRadius, background: bg, animation: "skeletonPulse 1.5s ease-in-out infinite", ...style }} />
@@ -66,7 +69,7 @@ const Badge = ({ ok, trueLabel = "Verified", falseLabel = "Unverified" }) => (
   </span>
 );
 
-const ConfirmModal = ({ open, title, message, confirmLabel, isLoading, onConfirm, onCancel }) => {
+const ConfirmModal = ({ open, title, message, confirmLabel, loadingLabel, isLoading, onConfirm, onCancel }) => {
   if (!open) return null;
   return (
     <div
@@ -97,10 +100,31 @@ const ConfirmModal = ({ open, title, message, confirmLabel, isLoading, onConfirm
             }}
           >
             {isLoading && <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", animation: "spin 0.6s linear infinite" }} />}
-            {isLoading ? "Logging out…" : confirmLabel}
+            {isLoading ? (loadingLabel || "Please wait…") : confirmLabel}
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+/* Lightweight toast — auto-dismisses, announced to screen readers */
+const Toast = ({ toast }) => {
+  if (!toast) return null;
+  const isSuccess = toast.type === "success";
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 60,
+        display: "flex", alignItems: "center", gap: 10, padding: "13px 20px", borderRadius: 12,
+        background: "#101828", color: "#fff", fontSize: 13.5, fontWeight: 600, maxWidth: "90vw",
+        boxShadow: "0 12px 28px rgba(0,0,0,0.2)", animation: "toastIn 0.25s ease-out",
+      }}
+    >
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: isSuccess ? "#22C55E" : "#F87171", flexShrink: 0 }} />
+      {toast.message}
     </div>
   );
 };
@@ -170,10 +194,10 @@ const DocumentTile = ({ title, imgUrl }) => (
       </div>
     </div>
     {imgUrl && (
-      <a 
-        href={imgUrl} 
-        target="_blank" 
-        rel="noreferrer" 
+      <a
+        href={imgUrl}
+        target="_blank"
+        rel="noreferrer"
         style={{ fontSize: 12, fontWeight: 600, color: "#2563EB", textDecoration: "none", padding: "6px 10px", borderRadius: 6, background: "#EFF6FF" }}
       >
         View
@@ -183,11 +207,12 @@ const DocumentTile = ({ title, imgUrl }) => (
 );
 
 /* ─────────────────────────────────────────────
-   Main Settings Page (Strict Read-Only)
+   Main Settings Page
 ───────────────────────────────────────────── */
 export default function ProviderSettings() {
   const navigate = useNavigate();
   const location = useLocation();
+  const fileInputRef = useRef(null);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
@@ -196,8 +221,12 @@ export default function ProviderSettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  const [confirmModal, setConfirmModal] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null); // null | "logout" | "removePhoto"
   const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isRemovingPhoto, setIsRemovingPhoto] = useState(false);
+  const [toast, setToast] = useState(null); // { type: "success" | "error", message }
 
   useEffect(() => {
     const resize = () => {
@@ -209,17 +238,26 @@ export default function ProviderSettings() {
     return () => window.removeEventListener("resize", resize);
   }, []);
 
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await axiosInstance.get("/provider/getproviderdetails");
         const doc = response?.data?.data || response?.data || {};
+        console.log("Fetched provider data:", doc);
 
         // Extract phone safely whether it was populated via userId lookup or directly injected
         const phoneData = doc?.userId?.phone || doc?.phone || "";
 
         setProvider({
           name: doc?.name || "",
+          profileImage: doc?.profileImage || "",
           phone: phoneData,
           address: doc?.Address || "",
           services: Array.isArray(doc?.services) ? doc.services : [],
@@ -243,6 +281,8 @@ export default function ProviderSettings() {
     fetchData();
   }, []);
 
+  const showToast = (type, message) => setToast({ type, message });
+
   const handleLogout = async () => {
     setIsProcessingAction(true);
     try {
@@ -256,11 +296,107 @@ export default function ProviderSettings() {
     }
   };
 
+  /* ── Profile photo: fake upload, ready to be swapped for the real endpoint ── */
+  const fakeUploadProfileImage = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Could not read the selected file"));
+      reader.onload = () => {
+        // Simulated network round-trip. Swap this whole function body for the
+        // real request below once the backend endpoint is live.
+        setTimeout(() => resolve(reader.result), 1300);
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const handleAvatarButtonClick = () => {
+    if (isUploadingPhoto) return;
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so picking the same file again still fires onChange
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("error", "Please choose an image file (JPG, PNG, or WEBP).");
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+      showToast("error", `Image must be smaller than ${MAX_IMAGE_SIZE_MB}MB.`);
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+
+     
+         const formData = new FormData();
+         formData.append("profileImage", file);
+         const response = await axiosInstance.post(
+           "/provider/update-profile-image",
+           formData,
+           { headers: { "Content-Type": "multipart/form-data" } }
+         );
+         const imageUrl = response?.data?.data?.profileImage || response?.data?.profileImage;
+      
+
+      setProvider((prev) => ({ ...prev, profileImage: imageUrl }));
+      showToast("success", "Profile photo updated.");
+    } catch (err) {
+      console.error("Photo upload failed:", err);
+      showToast("error", "Couldn't update your photo. Please try again.");
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const fakeRemoveProfileImage = () => new Promise((resolve) => setTimeout(resolve, 700));
+
+  const handleRemovePhotoConfirmed = async () => {
+    setIsRemovingPhoto(true);
+    try {
+      await fakeRemoveProfileImage();
+
+      /* ── Real backend call — uncomment when the endpoint is ready ──
+         await axiosInstance.post("/provider/remove-profile-image");
+      */
+
+      setProvider((prev) => ({ ...prev, profileImage: "" }));
+      showToast("success", "Profile photo removed.");
+    } catch (err) {
+      showToast("error", "Couldn't remove your photo. Please try again.");
+    } finally {
+      setIsRemovingPhoto(false);
+      setConfirmModal(null);
+    }
+  };
+
   if (hasError) return <ProfessionalError />;
 
   const initials = provider?.name
     ? provider.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
     : "";
+
+  const confirmContent = {
+    logout: {
+      title: "Log out of ApkaPass?",
+      message: "You will be redirected to the sign-in portal.",
+      confirmLabel: "Log Out",
+      loadingLabel: "Logging out…",
+      isLoading: isProcessingAction,
+      onConfirm: handleLogout,
+    },
+    removePhoto: {
+      title: "Remove profile photo?",
+      message: "Your profile will show your initials instead.",
+      confirmLabel: "Remove Photo",
+      loadingLabel: "Removing…",
+      isLoading: isRemovingPhoto,
+      onConfirm: handleRemovePhotoConfirmed,
+    },
+  };
 
   return (
     <div style={{ minHeight: "100dvh", background: "#F9FAFB", fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
@@ -269,7 +405,10 @@ export default function ProviderSettings() {
         html, body { width: 100%; overflow-x: hidden; }
         @keyframes skeletonPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
         .ap-btn:focus-visible, .ap-link:focus-visible { outline: 2px solid #16A34A; outline-offset: 2px; }
+        .ap-camera-btn:hover { background: #15803D; }
+        .ap-camera-btn:disabled { background: #94A3B8; cursor: not-allowed; }
       `}</style>
 
       <Sidebar visible={sidebarOpen} navigate={navigate} currentPath={location.pathname || "/provider-settings"} />
@@ -291,18 +430,9 @@ export default function ProviderSettings() {
             </button>
           )}
           <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#101828", margin: 0 }}>Provider Profile</h1>
-            <p style={{ fontSize: 13, color: "#667085", marginTop: 2, margin: 0 }}>View your registered business details on ApkaPass</p>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#101828", margin: 0 }}>Profile Settings</h1>
           </div>
         </div>
-
-        <button
-          className="ap-link"
-          onClick={() => navigate("/provider-profile")}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "#475467", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 8 }}
-        >
-          {icons.chevronLeft} Back to Dashboard
-        </button>
       </header>
 
       {/* MAIN CONTENT */}
@@ -323,9 +453,67 @@ export default function ProviderSettings() {
             </>
           ) : (
             <>
-              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#101828", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, flexShrink: 0 }}>
-                {initials || icons.user}
+              {/* Avatar + photo upload control */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <div style={{ position: "relative" }}>
+                  <div style={{
+                    width: 72, height: 72, borderRadius: "50%", overflow: "hidden",
+                    background: provider?.profileImage ? "#F1F5F9" : "#101828",
+                    color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 24, fontWeight: 700, opacity: isUploadingPhoto ? 0.5 : 1, transition: "opacity 0.2s",
+                  }}>
+                    {provider?.profileImage ? (
+                      <img
+                        src={provider.profileImage}
+                        alt={`${provider?.name || "Provider"}'s profile photo`}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (initials || icons.user)}
+                  </div>
+
+                  {isUploadingPhoto && (
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", border: "2.5px solid rgba(16,24,40,0.15)", borderTopColor: "#101828", animation: "spin 0.7s linear infinite" }} />
+                    </div>
+                  )}
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoSelected}
+                    style={{ display: "none" }}
+                  />
+
+                  <button
+                    type="button"
+                    className="ap-btn ap-camera-btn"
+                    onClick={handleAvatarButtonClick}
+                    disabled={isUploadingPhoto}
+                    aria-label={provider?.profileImage ? "Change profile photo" : "Add profile photo"}
+                    style={{
+                      position: "absolute", bottom: -2, right: -2, width: 28, height: 28, borderRadius: "50%",
+                      background: "#16A34A", border: "2px solid #fff", color: "#fff", display: "flex",
+                      alignItems: "center", justifyContent: "center", cursor: isUploadingPhoto ? "not-allowed" : "pointer",
+                      boxShadow: "0 2px 4px rgba(0,0,0,0.15)", transition: "background 0.15s",
+                    }}
+                  >
+                    {icons.camera}
+                  </button>
+                </div>
+
+                {provider?.profileImage && !isUploadingPhoto && (
+                  <button
+                    type="button"
+                    className="ap-link"
+                    onClick={() => setConfirmModal("removePhoto")}
+                    style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: 600, color: "#94A3B8", cursor: "pointer" }}
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
+
               <div style={{ flex: 1, minWidth: 200 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
                   <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#101828" }}>{provider?.name || "Provider Account"}</h2>
@@ -364,7 +552,7 @@ export default function ProviderSettings() {
                   <ReadOnlyField label="Provider Name" value={provider?.name} />
                   <ReadOnlyField label="Phone Number" value={provider?.phone} />
                   <ReadOnlyField label="Personal Address" value={provider?.address} />
-                  
+
                   <div style={{ marginBottom: 20 }}>
                     <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#344054", marginBottom: 8 }}>Offered Services</label>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -394,9 +582,9 @@ export default function ProviderSettings() {
               ) : (
                 <>
                   <ReadOnlyField label="Service Dispatch Address" value={provider?.locationAddress} />
-                  <ReadOnlyField 
-                    label="Geo-Coordinates (Lng, Lat)" 
-                    value={provider?.coordinates?.length === 2 ? `${provider.coordinates[0]}, ${provider.coordinates[1]}` : null} 
+                  <ReadOnlyField
+                    label="Geo-Coordinates (Lng, Lat)"
+                    value={provider?.coordinates?.length === 2 ? `${provider.coordinates[0]}, ${provider.coordinates[1]}` : null}
                   />
                 </>
               )}
@@ -409,7 +597,7 @@ export default function ProviderSettings() {
 
             <div style={{ background: "#fff", borderRadius: 20, padding: "24px", border: "1px solid #EAECF0", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: "#101828", margin: "0 0 16px" }}>KYC Documents</h3>
-              
+
               {isLoading ? (
                 <><SkeletonField /><SkeletonField /></>
               ) : (
@@ -445,14 +633,12 @@ export default function ProviderSettings() {
       </main>
 
       <ConfirmModal
-        open={confirmModal === "logout"}
-        title="Log out of ApkaPass?"
-        message="You will be redirected to the sign-in portal."
-        confirmLabel="Log Out"
-        isLoading={isProcessingAction}
-        onConfirm={handleLogout}
+        open={!!confirmModal}
+        {...(confirmModal ? confirmContent[confirmModal] : {})}
         onCancel={() => setConfirmModal(null)}
       />
+
+      <Toast toast={toast} />
     </div>
   );
 }
